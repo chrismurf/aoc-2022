@@ -35,15 +35,12 @@ fn part_1() {
 fn part_2() {
     let  file = File::open("input.txt")
         .unwrap_or_else(|_| panic!("File 'input.txt' not readable.") );
-    let mut reader = BufReader::new(file).lines().filter_map(|line| line.ok());
+    let reader = BufReader::new(file).lines().filter_map(|line| line.ok());
 
     let mut total: usize = 0;
 
-    loop {
-        let opts = vec!(reader.next(), reader.next(), reader.next());
-        if opts.iter().any(|x| x.is_none()) { break; }
-        let parts = opts.iter().map(|x| x.clone().unwrap()).collect();
-        let intersection = find_character_intersection(parts);
+    for parts in reader.collect::<Vec<String>>().chunks(3) {
+        let intersection = find_character_intersection(parts.to_vec());
         total += LETTERS.find(intersection).unwrap() + 1;
     }
 
