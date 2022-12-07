@@ -1,0 +1,109 @@
+use std::fs::File;
+use std::rc::Rc;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::io::{self, prelude::*, BufReader};
+
+#[derive(Default, Debug)]
+struct FileMetadata {
+    name : String,
+    size : usize
+}
+
+#[derive(Default, Debug)]
+struct DirectoryNode {
+    name : String,
+    parent : Option<Rc<RefCell<DirectoryNode>>>,
+    children : HashMap<String, Rc<RefCell<Node>>>
+}
+
+impl DirectoryNode {
+    fn parse_child_listing(&mut self, line : &str) {
+        let mut parts = line.split(" ");
+        match parts.next().unwrap() {
+            "dir" => {
+                self.ensure_child_directory(parts.next().unwrap());
+            },
+            size_str => {
+                let size : usize = size_str.parse().unwrap();
+                let name = parts.next().unwrap();
+                self.ensure_child_file(name, size);
+            }
+        }
+    }
+
+    fn ensure_child_directory(&mut self, name : &str) {
+        match self.children.get(subdir) {
+            None => {
+                self.children.insert(name, 
+                    Rc::new(RefCell::new(DirectoryNode {name, parent:None, children:HashMap::new()}));
+                )
+
+            },
+            Some => {
+
+            }
+    }
+
+    fn ensure_child_file(&mut self, name : &str, size: usize) {
+    }
+}
+
+#[derive(Debug)]
+enum Node {
+    DirNode(DirectoryNode),
+    FileNode(FileMetadata)
+}
+
+fn day07() {
+    let file = File::open("input.txt").expect("File 'input.txt' not readable.");
+    let reader = BufReader::new(file)
+        .lines() // Get a line iterator
+        .take(9) // FIXME: For testing.
+        .filter_map(|line| line.ok().to_owned()); // Get Strings instead of Result
+
+    let root = Rc::new(RefCell::new(DirectoryNode {name:"/".to_string(), parent:None, children:HashMap::new()}));
+    let mut current_directory = Rc::clone(&root);
+
+    for line in reader {
+        if line.starts_with("$") {
+            let args : Vec<&str> = line[2..].split(" ").collect();
+            match args[0] {
+                "cd" => match args[1] {
+                    "/" => {
+                        current_directory = Rc::clone(&root);
+                    },
+                    ".." => {
+                        //let parent = &current_directory.borrow().parent;
+                        // println!("FOO: {:?}", parent);
+                        //current_directory = Rc::clone(  parent.unwrap() );
+
+                        // current_directory = parent;
+                    },
+                    subdir => {
+                        match current_directory.borrow().children.get(subdir) {
+                            Some(child) => {
+                                println!("Exists: {:?}", subdir);
+                            },
+
+                            None => {
+                                let _ = current_directory.borrow_mut().ensure_child_directory(&subdir);
+                                // TODO: set to current directory!
+                            }
+                        }
+                        // println!("PATH: {}", path);
+                    }
+                },
+                "ls" => { }, // We assume any unrecognized output is a cur_dir listing.
+                _ => unreachable!()
+            }
+        } else {
+            current_directory.borrow_mut().parse_child_listing(&line);
+        }
+    }
+}
+
+fn main() -> io::Result<()> {
+    day07();
+    Ok(())
+}
