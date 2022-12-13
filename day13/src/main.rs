@@ -104,7 +104,6 @@ pub fn day13() -> Result<(), Error> {
     println!("Part 2: {}", start_pos * end_pos);
 
     Ok(())
-    
 }
 
 pub fn main() -> Result<(), Error> {
