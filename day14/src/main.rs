@@ -5,6 +5,7 @@ use std::io::BufRead;
 use ndarray::Array2;
 use itertools::Itertools;
 use std::{thread, time};
+use colored::*;
 
 #[derive(Debug, Clone)]
 pub struct Error;
@@ -13,11 +14,11 @@ pub struct Error;
 enum Cell { Empty, Wall, Sand }
 
 impl Cell {
-    fn as_char(&self) -> char {
+    fn as_string(&self) -> ColoredString {
         match &self {
-            Self::Empty => ' ',
-            Self::Wall  => '█',
-            Self::Sand  => '░',
+            Self::Empty => " ".black(),
+            Self::Wall  => "█".blue(),
+            Self::Sand  => "█".yellow(),
         }
     }
 }
@@ -47,7 +48,7 @@ impl SandSimulation {
     fn print(&self) {
         for row in self.grid.rows() {
             for cell in row {
-                print!("{}", cell.as_char());
+                print!("{}", cell.as_string());
             }
             println!();
         }    
