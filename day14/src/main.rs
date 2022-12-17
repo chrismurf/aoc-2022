@@ -6,12 +6,21 @@ use ndarray::Array2;
 use itertools::Itertools;
 use std::{thread, time};
 use colored::*;
+use gift::{Encoder, Step};
+use gift::encode::StepEnc;
+use pix::{gray::Gray8, Palette, Raster, rgb::SRgb8};
+
+enum RenderMode {
+    ASCII,
+    GIF(StepEnc<fs::File>),
+    None
+}
 
 #[derive(Debug, Clone)]
 pub struct Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Cell { Empty, Wall, Sand }
+enum Cell { Empty = 0, Wall = 1, Sand = 2 }
 
 impl Cell {
     fn as_string(&self) -> ColoredString {
@@ -54,17 +63,38 @@ impl SandSimulation {
         }    
     }
 
-    // Runs until either we overflow, or clog the inlet.
-    fn run(&mut self, inlet : Point, print : bool) -> usize {
-        let mut count = 0;
+    fn raster(&self) -> Raster<Gray8> {
+        let shape = self.grid.shape();
+        let mut raster = Raster::<Gray8>::with_clear(shape[1] as u32, shape[0] as u32);
+        for y in 0..shape[0] {
+            for x in 0..shape[1] {
+                *raster.pixel_mut(x as i32, y as i32) = Gray8::new(self.grid[[y,x]].clone() as u8);
+            }
+        }
+        raster
+    }
 
+    // Runs until either we overflow, or clog the inlet.
+    fn run(&mut self, inlet : Point, mut render_mode : RenderMode) -> usize {
+        let mut count = 0;
         loop {
             let mut grain = Point {x: inlet.x - self.x0, y: inlet.y - self.y0};
 
             'grain: loop {
-                if print {
-                    self.print();
-                    thread::sleep(time::Duration::from_millis(50));
+                match render_mode {
+                    RenderMode::ASCII => {
+                        self.print();
+                        thread::sleep(time::Duration::from_millis(50));
+                    },
+                    RenderMode::GIF(ref mut enc) => {
+                        let mut palette = Palette::new(3);
+                        palette.set_entry(SRgb8::new(0, 0, 0));
+                        palette.set_entry(SRgb8::new(0, 0, 0xFF));
+                        palette.set_entry(SRgb8::new(0xFF, 0xFF, 0));
+
+                        enc.encode_step(&Step::with_indexed(self.raster(), palette).with_delay_time_cs(Some(3))).unwrap();
+                    },
+                    RenderMode::None => {},
                 }
 
                 for x in [grain.x, grain.x-1, grain.x+1] {
@@ -166,7 +196,10 @@ pub fn day14() -> Result<(), Error> {
     }
 
     // Now run the simulation
-    let sand_to_overflow = sim.run(Point {x: 500, y: 0}, false);
+    let gif_file = fs::File::create("part1.gif").unwrap();
+    let gif_encoder = Encoder::new(gif_file).into_step_enc();
+
+    let sand_to_overflow = sim.run(Point {x: 500, y: 0}, RenderMode::GIF(gif_encoder));
     sim.print();
     println!("In Part 1, {} units of sand fell *before* we went into the abyss.", sand_to_overflow);
 
@@ -189,7 +222,7 @@ pub fn day14() -> Result<(), Error> {
     });
 
     // Now run the simulation
-    let sand_to_clog = sim2.run(Point {x: 500, y: 0}, false);
+    let sand_to_clog = sim2.run(Point {x: 500, y: 0}, RenderMode::None);
     sim2.print();
     println!("In Part 2, after {} units of sand fell we clogged the inlet.", sand_to_clog);
 
