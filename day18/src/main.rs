@@ -43,10 +43,14 @@ impl CubeMap {
             .collect()
     }
 
-    fn get_neighbors_in_bounds(&self, xyz: XYZ) -> HashSet<XYZ> {
+    fn get_neighbors_in_bounds(&self, xyz: XYZ, min: XYZ, max: XYZ) -> HashSet<XYZ> {
         self.get_neighbors(xyz)
             .iter()
-            .filter(|xyz| self.in_bounds(xyz))
+            .filter(|xyz| 
+                min.x <= xyz.x && xyz.x <= max.x &&
+                min.y <= xyz.y && xyz.y <= max.y &&
+                min.z <= xyz.z && xyz.z <= max.z
+            )
             .cloned()
             .collect()
     }
@@ -72,19 +76,21 @@ impl CubeMap {
     }
 
     fn flood(&self) -> Self {
+        let mut h2o_cubes = CubeMap::new();
         let mut new_cubes = CubeMap::new();
 
-        // Start with two diagonal cubes, outside the bounds of the current cubemap
-        new_cubes.add( XYZ {x: self.x_min()-1, y: self.y_min()-1, z: self.z_min()-1 } );
-        new_cubes.add( XYZ {x: self.x_max()+1, y: self.y_max()+1, z: self.z_max()+1 } );
-        let mut h2o_cubes = new_cubes.clone();
+        // Start with two diagonal cubes, just at the bounds of the current cubemap
+        let min = XYZ {x: self.x_min()-1, y: self.y_min()-1, z: self.z_min()-1 };
+        new_cubes.add( min.clone() );
+        let max = XYZ {x: self.x_max()+1, y: self.y_max()+1, z: self.z_max()+1 };
+        new_cubes.add( max.clone() );
 
         // Strategy: start outside, fill inward as much as we can.
         while !new_cubes.cubes.is_empty() {
             let mut next_new_cubes = CubeMap::new();
             for new_cube in new_cubes.cubes.iter() {
                 next_new_cubes.cubes.extend(
-                    h2o_cubes.get_neighbors_in_bounds(*new_cube)
+                    h2o_cubes.get_neighbors_in_bounds(*new_cube, min, max)
                     .iter()
                     .filter(|nbr| !h2o_cubes.cubes.contains(nbr) &&
                                   !new_cubes.cubes.contains(nbr) &&
@@ -99,12 +105,6 @@ impl CubeMap {
         }
 
         h2o_cubes
-    }
-
-    fn in_bounds(&self, xyz: &XYZ) -> bool {
-        xyz.x >= self.x_min() && xyz.x <= self.x_max() &&
-        xyz.y >= self.y_min() && xyz.y <= self.y_max() &&
-        xyz.z >= self.z_min() && xyz.z <= self.z_max()
     }
 
     fn x_min(&self) -> i32 { self.cubes.iter().map(|x| x.x).min().unwrap() }
