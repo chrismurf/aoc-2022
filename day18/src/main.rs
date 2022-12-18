@@ -7,6 +7,8 @@ use std::io::{prelude::*, BufReader};
 struct XYZ { x: i32, y: i32, z: i32}
 
 impl XYZ {
+    fn new(x: i32, y: i32, z: i32) -> Self { Self {x, y, z} }
+
     fn up(&self) -> Self { Self { x:self.x, y: self.y+1, z:self.z } }
     fn down(&self) -> Self { Self { x:self.x, y: self.y-1, z:self.z } }
     fn left(&self) -> Self { Self { x:self.x-1, y: self.y, z:self.z } }
@@ -19,8 +21,8 @@ impl FromStr for XYZ {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts : Vec<&str> = s.split(",").collect();
-        Ok(XYZ {x: parts[0].parse().unwrap(), y: parts[1].parse().unwrap(), z: parts[2].parse().unwrap() })
+        let parts : Vec<i32> = s.split(",").map(|x| x.parse().unwrap()).collect();
+        Ok(Self {x: parts[0], y: parts[1], z: parts[2] })
     }
 }
 
@@ -63,13 +65,16 @@ impl CubeMap {
     }
 
     fn surface_area(&self) -> usize {
+        // Sum the number of faces without neighbors
         self.cubes.iter()
             .map(|cube| 6 - self.get_present_neighbor_count(*cube))
             .sum()
     }
 
     fn exterior_surface_area(&self) -> usize {
+        // Generate a flooded exterior
         let flooded = self.flood();
+        // Sum surfaces touching a flooded cube
         self.cubes.iter()
             .map(|cube| flooded.get_present_neighbor_count(*cube))
             .sum()
@@ -80,17 +85,20 @@ impl CubeMap {
         let mut new_cubes = CubeMap::new();
 
         // Start with two diagonal cubes, just at the bounds of the current cubemap
-        let min = XYZ {x: self.x_min()-1, y: self.y_min()-1, z: self.z_min()-1 };
-        new_cubes.add( min.clone() );
-        let max = XYZ {x: self.x_max()+1, y: self.y_max()+1, z: self.z_max()+1 };
-        new_cubes.add( max.clone() );
+        let h2o_min = self.min_bound().left().down().back();
+        new_cubes.add( h2o_min.clone() );
 
-        // Strategy: start outside, fill inward as much as we can.
+        let h2o_max = self.max_bound().right().up().fwd();
+        new_cubes.add( h2o_max.clone() );
+
+        // Strategy: for each new "water" cube, expand to empty neighbor slots within
+        // the min/max bounds we've set.  Empty here means "not water" and also "not cube".
+        // Repeat until we stop adding new water spots, at which point we're flooded.
         while !new_cubes.cubes.is_empty() {
             let mut next_new_cubes = CubeMap::new();
             for new_cube in new_cubes.cubes.iter() {
                 next_new_cubes.cubes.extend(
-                    h2o_cubes.get_neighbors_in_bounds(*new_cube, min, max)
+                    h2o_cubes.get_neighbors_in_bounds(*new_cube, h2o_min, h2o_max)
                     .iter()
                     .filter(|nbr| !h2o_cubes.cubes.contains(nbr) &&
                                   !new_cubes.cubes.contains(nbr) &&
@@ -107,13 +115,27 @@ impl CubeMap {
         h2o_cubes
     }
 
-    fn x_min(&self) -> i32 { self.cubes.iter().map(|x| x.x).min().unwrap() }
-    fn y_min(&self) -> i32 { self.cubes.iter().map(|x| x.y).min().unwrap() }
-    fn z_min(&self) -> i32 { self.cubes.iter().map(|x| x.z).min().unwrap() }
-    
-    fn x_max(&self) -> i32 { self.cubes.iter().map(|x| x.x).max().unwrap() }
-    fn y_max(&self) -> i32 { self.cubes.iter().map(|x| x.y).max().unwrap() }
-    fn z_max(&self) -> i32 { self.cubes.iter().map(|x| x.z).max().unwrap() }
+    // These are kinda ugly.
+    fn min_bound(&self) -> XYZ {
+        self.cubes.iter()
+            .fold(XYZ::new(i32::MAX, i32::MAX, i32::MAX), |mut min, xyz| {
+                if xyz.x < min.x { min.x = xyz.x }
+                if xyz.y < min.y { min.y = xyz.y }
+                if xyz.z < min.z { min.z = xyz.z }
+                min
+            })
+    }
+
+        // These are kinda ugly.
+    fn max_bound(&self) -> XYZ {
+        self.cubes.iter()
+            .fold(XYZ::new(i32::MIN, i32::MIN, i32::MIN), |mut max, xyz| {
+                if xyz.x > max.x { max.x = xyz.x }
+                if xyz.y > max.y { max.y = xyz.y }
+                if xyz.z > max.z { max.z = xyz.z }
+                max
+            })
+    }
 }
 
 pub fn day18() {
