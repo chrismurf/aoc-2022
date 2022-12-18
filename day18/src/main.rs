@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::str::FromStr;
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 use std::io::{prelude::*, BufReader};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -15,16 +15,25 @@ impl XYZ {
     fn back(&self) -> Self { Self { x:self.x, y: self.y, z:self.z-1 } }
 }
 
+impl FromStr for XYZ {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts : Vec<&str> = s.split(",").collect();
+        Ok(XYZ {x: parts[0].parse().unwrap(), y: parts[1].parse().unwrap(), z: parts[2].parse().unwrap() })
+    }
+}
+
 #[derive(Debug, Clone)]
 struct CubeMap {
-    cubes : HashMap<XYZ, Cube>,
+    cubes : HashSet<XYZ>,
 }
 
 impl CubeMap {
-    fn new() -> Self { Self { cubes: HashMap::new() } }
+    fn new() -> Self { Self { cubes: HashSet::new() } }
 
-    fn add(&mut self, cube: Cube) {
-        self.cubes.insert(cube.xyz, cube);
+    fn add(&mut self, cube: XYZ) {
+        self.cubes.insert(cube);
     }
 
     fn get_neighbors(&self, xyz: XYZ) -> HashSet<XYZ> {
@@ -45,20 +54,20 @@ impl CubeMap {
     fn get_present_neighbor_count(&self, xyz: XYZ) -> usize {
         self.get_neighbors(xyz)
             .iter()
-            .filter(|xyz| self.cubes.contains_key(&xyz))
+            .filter(|xyz| self.cubes.contains(&xyz))
             .count()
     }
 
     fn surface_area(&self) -> usize {
-        self.cubes.values()
-            .map(|cube| 6 - self.get_present_neighbor_count(cube.xyz))
+        self.cubes.iter()
+            .map(|cube| 6 - self.get_present_neighbor_count(*cube))
             .sum()
     }
 
     fn exterior_surface_area(&self) -> usize {
         let flooded = self.flood();
-        self.cubes.values()
-            .map(|cube| flooded.get_present_neighbor_count(cube.xyz))
+        self.cubes.iter()
+            .map(|cube| flooded.get_present_neighbor_count(*cube))
             .sum()
     }
 
@@ -66,29 +75,28 @@ impl CubeMap {
         let mut new_cubes = CubeMap::new();
 
         // Start with two diagonal cubes, outside the bounds of the current cubemap
-        new_cubes.add( Cube::new(self.x_min()-1, self.y_min()-1, self.z_min()-1) );
-        new_cubes.add( Cube::new(self.x_max()+1, self.y_max()+1, self.z_max()+1) );
+        new_cubes.add( XYZ {x: self.x_min()-1, y: self.y_min()-1, z: self.z_min()-1 } );
+        new_cubes.add( XYZ {x: self.x_max()+1, y: self.y_max()+1, z: self.z_max()+1 } );
         let mut h2o_cubes = new_cubes.clone();
 
         // Strategy: start outside, fill inward as much as we can.
         while !new_cubes.cubes.is_empty() {
             let mut next_new_cubes = CubeMap::new();
-            for new_cube in new_cubes.cubes.values() {
+            for new_cube in new_cubes.cubes.iter() {
                 next_new_cubes.cubes.extend(
-                    h2o_cubes.get_neighbors_in_bounds(new_cube.xyz)
+                    h2o_cubes.get_neighbors_in_bounds(*new_cube)
                     .iter()
-                    .filter(|nbr| !h2o_cubes.cubes.contains_key(nbr) &&
-                                  !new_cubes.cubes.contains_key(nbr) &&
-                                  !next_new_cubes.cubes.contains_key(nbr) &&
-                                  !self.cubes.contains_key(nbr))
-                    .map(|xyz| (*xyz, Cube {xyz: *xyz} ))
-                    .collect::<HashMap<XYZ, Cube>>()
+                    .filter(|nbr| !h2o_cubes.cubes.contains(nbr) &&
+                                  !new_cubes.cubes.contains(nbr) &&
+                                  !next_new_cubes.cubes.contains(nbr) &&
+                                  !self.cubes.contains(nbr))
+                    .cloned()
+                    .collect::<HashSet<XYZ>>()
                 )
             }
             h2o_cubes.cubes.extend(new_cubes.cubes);
             new_cubes = next_new_cubes;
         }
-
 
         h2o_cubes
     }
@@ -99,29 +107,13 @@ impl CubeMap {
         xyz.z >= self.z_min() && xyz.z <= self.z_max()
     }
 
-    fn x_min(&self) -> i32 { self.cubes.keys().map(|x| x.x).min().unwrap() }
-    fn y_min(&self) -> i32 { self.cubes.keys().map(|x| x.y).min().unwrap() }
-    fn z_min(&self) -> i32 { self.cubes.keys().map(|x| x.z).min().unwrap() }
+    fn x_min(&self) -> i32 { self.cubes.iter().map(|x| x.x).min().unwrap() }
+    fn y_min(&self) -> i32 { self.cubes.iter().map(|x| x.y).min().unwrap() }
+    fn z_min(&self) -> i32 { self.cubes.iter().map(|x| x.z).min().unwrap() }
     
-    fn x_max(&self) -> i32 { self.cubes.keys().map(|x| x.x).max().unwrap() }
-    fn y_max(&self) -> i32 { self.cubes.keys().map(|x| x.y).max().unwrap() }
-    fn z_max(&self) -> i32 { self.cubes.keys().map(|x| x.z).max().unwrap() }
-}
-
-#[derive(Debug, Clone)]
-struct Cube { xyz: XYZ }
-
-impl Cube {
-    fn new(x: i32, y: i32, z: i32) -> Self { Self { xyz: XYZ {x, y, z} } }
-}
-
-impl FromStr for Cube {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts : Vec<&str> = s.split(",").collect();
-        Ok(Cube::new(parts[0].parse().unwrap(), parts[1].parse().unwrap(), parts[2].parse().unwrap()))
-    }
+    fn x_max(&self) -> i32 { self.cubes.iter().map(|x| x.x).max().unwrap() }
+    fn y_max(&self) -> i32 { self.cubes.iter().map(|x| x.y).max().unwrap() }
+    fn z_max(&self) -> i32 { self.cubes.iter().map(|x| x.z).max().unwrap() }
 }
 
 pub fn day18() {
@@ -129,8 +121,7 @@ pub fn day18() {
     let map = CubeMap {cubes : BufReader::new(file)
         .lines() // Get a line iterator
         .filter_map(|line| line.ok()) // Get Strings instead of Result
-        .filter_map(|line| line.parse::<Cube>().ok())
-        .map(|cube| (cube.xyz, cube) )
+        .filter_map(|line| line.parse::<XYZ>().ok())
         .collect() };
 
     println!("Part 1: {}", map.surface_area()); // 4460
