@@ -10,6 +10,7 @@ use gift::{Encoder, Step};
 use gift::encode::StepEnc;
 use pix::{gray::Gray8, Palette, Raster, rgb::SRgb8};
 
+#[allow(dead_code)] // These are just options for me to manually recompile with.
 enum RenderMode {
     ASCII,
     GIF(StepEnc<fs::File>),

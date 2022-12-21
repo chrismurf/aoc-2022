@@ -33,6 +33,7 @@ impl Chamber {
         }
     }
 
+    #[allow(dead_code)]
     fn print(&self) {
         for row in (0..=self.current_height).rev() {
             println!("{}", self.grid.row(row).iter().map(|x| if *x {'#'} else {' '} ).collect::<String>());
@@ -50,10 +51,6 @@ impl Chamber {
                 .unwrap() {return true }
         }
         return false;
-    }
-
-    fn full_top_row(&self) -> bool {
-        return self.grid.row(self.current_height-1).iter().all(|x| *x);
     }
 }
 
