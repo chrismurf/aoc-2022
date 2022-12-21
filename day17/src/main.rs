@@ -76,8 +76,6 @@ pub fn day17() {
     let piece_iter = pieces.iter().cycle();
     let mut chamber = Chamber::new(50000000, 7);
 
-    let now = SystemTime::now();
-
     for (piece_num, piece) in piece_iter.enumerate() {
         let mut x = 2;
         let mut y = chamber.current_height as i32 + 3;
