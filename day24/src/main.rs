@@ -51,6 +51,7 @@ struct ValleyMap {
 }
 
 impl ValleyMap {
+    #![allow(dead_code)] // This is just for debugging and test
     fn time_to_string(&self, time: usize) -> String {
         let shape = self.spacetime.dim();
         let mut s = String::with_capacity(shape.1 + shape.1*shape.2);
