@@ -2,6 +2,14 @@ use std::fs;
 use std::str::FromStr;
 use ndarray::Array3;
 use num::Integer;
+use pathfinding::prelude::astar;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+enum Pos {
+    Start(usize),
+    SpaceTime((usize, usize, usize)),
+    End(usize),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 struct Blizzards {
@@ -36,8 +44,8 @@ impl Blizzards {
         unreachable!()
     }
 
-    fn any(&self) -> bool {
-        self.north || self.east || self.south || self.west
+    fn empty(&self) -> bool {
+        !self.north && !self.east && !self.south && !self.west
     }
 
     fn count(&self) -> u32 {
@@ -48,21 +56,6 @@ impl Blizzards {
 #[derive(Debug, Clone)]
 struct ValleyMap {
     spacetime : Array3<Blizzards>
-}
-
-impl ValleyMap {
-    #![allow(dead_code)] // This is just for debugging and test
-    fn time_to_string(&self, time: usize) -> String {
-        let shape = self.spacetime.dim();
-        let mut s = String::with_capacity(shape.1 + shape.1*shape.2);
-        for r in 0..shape.1 {
-            for c in 0..shape.2 {
-                s.push(self.spacetime[[time % shape.0, r, c]].as_char());
-            }
-            s.push('\n');
-        }
-        s
-    }
 }
 
 impl FromStr for ValleyMap {
@@ -104,9 +97,83 @@ impl FromStr for ValleyMap {
     }    
 }
 
+impl ValleyMap {
+    #![allow(dead_code)] // This is just for debugging and test
+    fn time_to_string(&self, time: usize) -> String {
+        let shape = self.spacetime.dim();
+        let mut s = String::with_capacity(shape.1 + shape.1*shape.2);
+        for r in 0..shape.1 {
+            for c in 0..shape.2 {
+                s.push(self.spacetime[[time % shape.0, r, c]].as_char());
+            }
+            s.push('\n');
+        }
+        s
+    }
+
+    fn min_distance_to_goal(&self, pos: &Pos) -> usize {
+        let shape = self.spacetime.dim();
+        match pos {
+            Pos::Start(_) => shape.1 + shape.2,
+            Pos::SpaceTime((t, r, c)) => (shape.1 - r) + (shape.2 - c) - 1,
+            Pos::End(_) => 0
+        }
+    }
+
+    fn available_moves(&self, pos: &Pos) -> Vec<(Pos, usize)> {
+        let mut vec = Vec::with_capacity(5);
+        match pos {
+            Pos::Start(t) => {
+                vec.push((Pos::Start(t+1), 1));
+                vec.push((Pos::SpaceTime((t+1, 0, 0)), 1));
+            },
+            Pos::End(t) => {
+                vec.push((Pos::End(t+1), 1));
+             },
+            Pos::SpaceTime((t, r, c)) => {
+                let shape = self.spacetime.dim();
+                let st_time = (t+1) % shape.0;
+                // Wait
+                if self.spacetime[[st_time, *r, *c]].empty() {
+                    vec.push((Pos::SpaceTime((t+1, *r, *c)), 1))
+                }
+                // North
+                if *r > 0 && self.spacetime[[st_time, *r - 1, *c]].empty() {
+                    vec.push((Pos::SpaceTime((t+1, *r-1, *c)), 1))
+                }
+                // West
+                if *c > 0 && self.spacetime[[st_time, *r, *c-1]].empty() {
+                    vec.push((Pos::SpaceTime((t+1, *r, *c-1)), 1))
+                }
+                // South
+                if *r < (shape.1 - 1) && self.spacetime[[st_time, *r+1, *c]].empty() {
+                    vec.push((Pos::SpaceTime((t+1, *r+1, *c)), 1))
+                }
+                // East
+                if *c < (shape.2 - 1) && self.spacetime[[st_time, *r, *c+1]].empty() {
+                    vec.push((Pos::SpaceTime((t+1, *r, *c+1)), 1))
+                }
+                // Can we exit?!
+                if *r == (shape.1-1) && *c == (shape.2-1) {
+                    vec.push((Pos::End(t+1), 1))
+                }
+            },
+        }
+        vec
+    }
+}
+
 pub fn day23() {
     let file = fs::read_to_string("input.txt").expect("Couldn't read input.txt");
-    let mut _plan : ValleyMap = file.parse().unwrap();
+    let plan : ValleyMap = file.parse().unwrap();
+
+    let result = astar(
+        &Pos::Start(0),
+        |pos| plan.available_moves(pos),
+        |pos| plan.min_distance_to_goal(pos),
+        |pos| match pos { Pos::End(_) => true, _ => false }
+    );
+    println!("{} Moves!", result.unwrap().1); // 253
 }
 
 pub fn main() {
