@@ -111,12 +111,21 @@ impl ValleyMap {
         s
     }
 
-    fn min_distance_to_goal(&self, pos: &Pos) -> usize {
+    fn min_distance_to_end(&self, pos: &Pos) -> usize {
         let shape = self.spacetime.dim();
         match pos {
             Pos::Start(_) => shape.1 + shape.2,
-            Pos::SpaceTime((t, r, c)) => (shape.1 - r) + (shape.2 - c) - 1,
+            Pos::SpaceTime((_t, r, c)) => (shape.1 - r) + (shape.2 - c) - 1,
             Pos::End(_) => 0
+        }
+    }
+
+    fn min_distance_to_start(&self, pos: &Pos) -> usize {
+        let shape = self.spacetime.dim();
+        match pos {
+            Pos::End(_) => shape.1 + shape.2,
+            Pos::SpaceTime((_t, r, c)) => r + c + 1,
+            Pos::Start(_) => 0
         }
     }
 
@@ -125,10 +134,21 @@ impl ValleyMap {
         match pos {
             Pos::Start(t) => {
                 vec.push((Pos::Start(t+1), 1));
-                vec.push((Pos::SpaceTime((t+1, 0, 0)), 1));
+
+                let shape = self.spacetime.dim();
+                let st_time = (t+1) % shape.0;
+                if self.spacetime[[st_time, 0, 0]].empty() {
+                    vec.push((Pos::SpaceTime((t+1, 0, 0)), 1))
+                }
             },
             Pos::End(t) => {
                 vec.push((Pos::End(t+1), 1));
+
+                let shape = self.spacetime.dim();
+                let st_time = (t+1) % shape.0;
+                if self.spacetime[[st_time, shape.1-1, shape.2-1]].empty() {
+                    vec.push((Pos::SpaceTime((t+1, shape.1-1, shape.2-1)), 1))
+                }
              },
             Pos::SpaceTime((t, r, c)) => {
                 let shape = self.spacetime.dim();
@@ -153,6 +173,10 @@ impl ValleyMap {
                 if *c < (shape.2 - 1) && self.spacetime[[st_time, *r, *c+1]].empty() {
                     vec.push((Pos::SpaceTime((t+1, *r, *c+1)), 1))
                 }
+                // Can we go back to start?!
+                if *r == 0 && *c == 0 {
+                    vec.push((Pos::Start(t+1), 1))
+                }
                 // Can we exit?!
                 if *r == (shape.1-1) && *c == (shape.2-1) {
                     vec.push((Pos::End(t+1), 1))
@@ -167,13 +191,37 @@ pub fn day23() {
     let file = fs::read_to_string("input.txt").expect("Couldn't read input.txt");
     let plan : ValleyMap = file.parse().unwrap();
 
-    let result = astar(
+    // Part 1 - go to end.
+    let (moves, minutes) = astar(
         &Pos::Start(0),
         |pos| plan.available_moves(pos),
-        |pos| plan.min_distance_to_goal(pos),
+        |pos| plan.min_distance_to_end(pos),
         |pos| match pos { Pos::End(_) => true, _ => false }
-    );
-    println!("{} Moves!", result.unwrap().1); // 253
+    ).expect("No solution found!");
+    println!("Part 1 -- {} minutes.", minutes); // 253
+
+    // Part 2 -  go back to start, and back to end.
+    let (moves, minutes) = astar(
+        moves.last().expect("Failed first part, second won't work either!"),
+        |pos| plan.available_moves(pos),
+        |pos| plan.min_distance_to_start(pos),
+        |pos| match pos { Pos::Start(_) => true, _ => false }
+    ).expect("Couldn't find way back to beginning.");
+
+    println!("Part 2 -- another {} minutes to reach start.", minutes);
+
+    let (moves, minutes) = astar(
+        moves.last().expect("Failed first part, second won't work either!"),
+        |pos| plan.available_moves(pos),
+        |pos| plan.min_distance_to_end(pos),
+        |pos| match pos { Pos::End(_) => true, _ => false }
+    ).expect("Couldn't find way back to beginning.");
+
+    println!("Part 2 -- another {} minutes to get back to end.", minutes);
+
+    let Pos::End(total_minutes) = moves.last().unwrap() else { unreachable!() };
+    println!("Part 2 -- {} minutes in total.", total_minutes);
+
 }
 
 pub fn main() {
